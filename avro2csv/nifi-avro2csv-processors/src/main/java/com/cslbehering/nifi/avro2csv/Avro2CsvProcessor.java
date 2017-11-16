@@ -72,7 +72,6 @@ import com.cslbehering.nifi.avro2csv.CsvProcessor.CsvBundle;
 @WritesAttribute(attribute = "mime.type", description = "Sets the mime type to text/csv")
 public class Avro2CsvProcessor extends AbstractProcessor {
 
-
 	protected static final String CONTAINER_ARRAY = "array";
 	protected static final String CONTAINER_NONE = "none";
 	protected static final String MIME_TYPE = "text/csv";
@@ -130,7 +129,7 @@ public class Avro2CsvProcessor extends AbstractProcessor {
 		super.init(context);
 
 		final List<PropertyDescriptor> properties = new ArrayList<>();
- 
+
 		properties.add(SCHEMA);
 
 		properties.add(CSV_COMPATIBILITY);
@@ -155,7 +154,7 @@ public class Avro2CsvProcessor extends AbstractProcessor {
 
 	@Override
 	public void onTrigger(ProcessContext context, ProcessSession session) throws ProcessException {
-			convertAvroToCsv(context, session);
+		convertAvroToCsv(context, session);
 	}
 
 	private void convertAvroToCsv(ProcessContext context, ProcessSession session) {
@@ -174,9 +173,13 @@ public class Avro2CsvProcessor extends AbstractProcessor {
 		final boolean schemaLess = stringSchema != null;
 
 		try {
+			/*
+			 * It can be replaced by direct printing mechanism {we need to have a PROPER
+			 * Strategy to take care of CSV broken/invalid records}. Currently this approach
+			 * is using a buffered CharArrayWriter.
+			 */
 			CsvBundle bundle = CsvProcessor.generateCsvPrinter(csvRecordDelimiter, csvCompatibility);
 			flowFile = session.write(flowFile, (final InputStream rawIn, final OutputStream rawOut) -> {
-		 
 
 				if (schemaLess) {
 					if (schema == null) {
@@ -206,19 +209,15 @@ public class Avro2CsvProcessor extends AbstractProcessor {
 								csvSortDirection.equals("D"), csvSortFIELD.equals("F"));
 
 						GenericRecord currRecord = null;
-						getLogger().info("This is the CSV Row Columns: {}", new Object[] { columns.toString() });
-						getLogger().info("This is the CSV Row Keys: {}", new Object[] { reader.getMetaKeys() });
-						int counter = 0;
+
 						while (reader.hasNext()) {
 							currRecord = reader.next(currRecord);
 
 							CsvProcessor.processRecord(bundle.getPrinter(), currRecord, columns);
-							
+
 						}
-						String row = bundle.getWriter().toString();
-				 
-						getLogger().info((counter++) + "< \tThis is the CSV Row: {}", new Object[] { row });
-						out.write(row.getBytes());
+
+						out.write(bundle.getWriter().toString().getBytes());
 					}
 				}
 			});
@@ -244,7 +243,6 @@ public class Avro2CsvProcessor extends AbstractProcessor {
 		return lastElement;
 	}
 
-
 	@Override
 	protected PropertyDescriptor getSupportedDynamicPropertyDescriptor(final String propertyDescriptorName) {
 		return new PropertyDescriptor.Builder().name(propertyDescriptorName).required(false)
@@ -254,5 +252,4 @@ public class Avro2CsvProcessor extends AbstractProcessor {
 				.expressionLanguageSupported(true).dynamic(true).build();
 	}
 
-	 
 }

@@ -28,7 +28,7 @@ import org.apache.avro.Schema;
 import org.apache.avro.Schema.Field;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.commons.csv.CSVFormat;
-import org.apache.commons.csv.CSVPrinter; 
+import org.apache.commons.csv.CSVPrinter;
 
 /**
  * 
@@ -104,6 +104,13 @@ public class CsvProcessor {
 		return new CsvBundle(printer, writer);
 	}
 
+	public static CSVPrinter generateCsvPrinter(String recordDelimiter, String compatibility, Appendable out)
+			throws Exception {
+		CSVFormat csvFormat = CSVFormat.valueOf(compatibility).withRecordSeparator(recordDelimiter);
+
+		CSVPrinter printer = new CSVPrinter(out, csvFormat);
+		return printer;
+	}
 
 	public static List processRecord(CSVPrinter printer, GenericRecord record, List<Column> columns)
 			throws IOException {
