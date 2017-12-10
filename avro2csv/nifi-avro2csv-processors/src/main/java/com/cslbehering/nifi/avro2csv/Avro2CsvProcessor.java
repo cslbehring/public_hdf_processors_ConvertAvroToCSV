@@ -34,6 +34,7 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.io.BinaryDecoder;
 import org.apache.avro.io.DatumReader;
 import org.apache.avro.io.DecoderFactory;
+import org.apache.commons.csv.CSVPrinter;
 import org.apache.nifi.annotation.behavior.InputRequirement;
 import org.apache.nifi.annotation.behavior.InputRequirement.Requirement;
 import org.apache.nifi.annotation.behavior.SideEffectFree;
@@ -55,7 +56,7 @@ import org.apache.nifi.processor.exception.ProcessException;
 import org.apache.nifi.processor.util.StandardValidators;
 
 import com.cslbehering.nifi.avro2csv.CsvProcessor.Column;
-import com.cslbehering.nifi.avro2csv.CsvProcessor.CsvBundle;
+import com.cslbehering.nifi.avro2csv.CsvProcessor;
 
 /**
  * 
@@ -66,7 +67,7 @@ import com.cslbehering.nifi.avro2csv.CsvProcessor.CsvBundle;
 
 @SideEffectFree
 @SupportsBatching
-@Tags({ "avro", "convert", "csv" })
+@Tags({ "avro", "convert", "csv", "v4" })
 @InputRequirement(Requirement.INPUT_ALLOWED)
 @CapabilityDescription("Converts a Binary Avro record into a CSV object. This processor provides a direct mapping of an Avro field to a CSV row. ")
 @WritesAttribute(attribute = "mime.type", description = "Sets the mime type to text/csv")
@@ -92,9 +93,11 @@ public class Avro2CsvProcessor extends AbstractProcessor {
 
 	public static final AllowableValue CSV_DELIMITER_DEFAULT = new AllowableValue("\n", "LF", "New line per record");
 
-	static final PropertyDescriptor SCHEMA = new PropertyDescriptor.Builder().name("Avro schema")
-			.description("If the Avro records do not contain the schema (datum only), it must be specified here.")
-			.addValidator(StandardValidators.NON_EMPTY_VALIDATOR).required(false).build();
+	// static final PropertyDescriptor SCHEMA = new
+	// PropertyDescriptor.Builder().name("Avro schema")
+	// .description("If the Avro records do not contain the schema (datum only), it
+	// must be specified here.")
+	// .addValidator(StandardValidators.NON_EMPTY_VALIDATOR).required(false).build();
 
 	static final PropertyDescriptor CSV_COMPATIBILITY = new PropertyDescriptor.Builder().name("CSV Compatibility")
 			.description(
@@ -130,7 +133,7 @@ public class Avro2CsvProcessor extends AbstractProcessor {
 
 		final List<PropertyDescriptor> properties = new ArrayList<>();
 
-		properties.add(SCHEMA);
+		// properties.add(SCHEMA);
 
 		properties.add(CSV_COMPATIBILITY);
 		properties.add(RECORD_DELIMITER);
@@ -163,14 +166,14 @@ public class Avro2CsvProcessor extends AbstractProcessor {
 			return;
 		}
 
-		final String stringSchema = context.getProperty(SCHEMA).getValue();
+		// final String stringSchema = context.getProperty(SCHEMA).getValue();
 
 		final String csvCompatibility = context.getProperty(CSV_COMPATIBILITY).getValue();
 		final String csvRecordDelimiter = context.getProperty(RECORD_DELIMITER).getValue();
 		final String csvSortDirection = context.getProperty(CSV_HEADER_SORTING).getValue();
 		final String csvSortFIELD = context.getProperty(CSV_HEADER_SORT_FIELD).getValue();
 
-		final boolean schemaLess = stringSchema != null;
+		// final boolean schemaLess = stringSchema != null;
 
 		try {
 			/*
@@ -178,49 +181,58 @@ public class Avro2CsvProcessor extends AbstractProcessor {
 			 * Strategy to take care of CSV broken/invalid records}. Currently this approach
 			 * is using a buffered CharArrayWriter.
 			 */
-			CsvBundle bundle = CsvProcessor.generateCsvPrinter(csvRecordDelimiter, csvCompatibility);
+
 			flowFile = session.write(flowFile, (final InputStream rawIn, final OutputStream rawOut) -> {
 
-				if (schemaLess) {
-					if (schema == null) {
-						schema = new Schema.Parser().parse(stringSchema);
-					}
+				// if (schemaLess) {
+				// if (schema == null) {
+				// schema = new Schema.Parser().parse(stringSchema);
+				// }
+				//
+				// List<Column> columns = CsvProcessor.extractColumns(schema,
+				// csvSortDirection.equals("D"),
+				// csvSortFIELD.equals("F"));
+				//
+				// try (final InputStream in = new BufferedInputStream(rawIn);
+				// final OutputStream out = new BufferedOutputStream(rawOut)) {
+				// final DatumReader<GenericRecord> reader = new
+				// GenericDatumReader<GenericRecord>(schema);
+				// final BinaryDecoder decoder = DecoderFactory.get().binaryDecoder(in, null);
+				// final GenericRecord record = reader.read(null, decoder);
+				//
+				// CsvProcessor.processRecord(out, record, columns);
+				// out.write(bundle.getWriter().toString().getBytes());
+				// }
+				// } else {
 
-					List<Column> columns = CsvProcessor.extractColumns(schema, csvSortDirection.equals("D"),
+				try (final InputStream in = new BufferedInputStream(rawIn);
+						final OutputStream out = new BufferedOutputStream(rawOut);
+						final DataFileStream<GenericRecord> reader = new DataFileStream<>(in,
+								new GenericDatumReader<GenericRecord>())) {
+					CSVPrinter p = CsvProcessor.generateCsvPrinter(csvRecordDelimiter, csvCompatibility, out);
+					List<Column> columns = CsvProcessor.extractColumns(reader.getSchema(), csvSortDirection.equals("D"),
 							csvSortFIELD.equals("F"));
 
-					try (final InputStream in = new BufferedInputStream(rawIn);
-							final OutputStream out = new BufferedOutputStream(rawOut)) {
-						final DatumReader<GenericRecord> reader = new GenericDatumReader<GenericRecord>(schema);
-						final BinaryDecoder decoder = DecoderFactory.get().binaryDecoder(in, null);
-						final GenericRecord record = reader.read(null, decoder);
+					GenericRecord currRecord = null;
+					long counter = 0;
+					while (reader.hasNext()) {
+						currRecord = reader.next(currRecord);
 
-						CsvProcessor.processRecord(bundle.getPrinter(), record, columns);
-						out.write(bundle.getWriter().toString().getBytes());
+						CsvProcessor.processRecordY(p, currRecord, columns);
+						// out.write(l.toString().getBytes());
+						// out.flush();
+						// getLogger().info("FLUSHED2");
+						counter++;
 					}
-				} else {
-
-					try (final InputStream in = new BufferedInputStream(rawIn);
-							final OutputStream out = new BufferedOutputStream(rawOut);
-							final DataFileStream<GenericRecord> reader = new DataFileStream<>(in,
-									new GenericDatumReader<GenericRecord>())) {
-
-						List<Column> columns = CsvProcessor.extractColumns(reader.getSchema(),
-								csvSortDirection.equals("D"), csvSortFIELD.equals("F"));
-
-						GenericRecord currRecord = null;
-
-						while (reader.hasNext()) {
-							currRecord = reader.next(currRecord);
-
-							CsvProcessor.processRecord(bundle.getPrinter(), currRecord, columns);
-
-						}
-
-						out.write(bundle.getWriter().toString().getBytes());
-					}
+					getLogger().info("++++++++++++++++++++++ Total Record Count: " + counter);
+				} catch (Exception e) {
+					getLogger().error(
+							"Failed to convert  from Avro to CSV due to Printer error {}; transferring to failure",
+							new Object[] { e.getMessage() });
 				}
-			});
+			}
+			// }
+			);
 		} catch (final Exception pe) {
 			getLogger().error("Failed to convert {} from Avro to CSV due to {}; transferring to failure",
 					new Object[] { flowFile, pe });

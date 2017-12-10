@@ -19,7 +19,8 @@
     <parent>
         <groupId>com.cslbehering.nifi</groupId>
         <artifactId>avro2csv</artifactId>
-        <version>0.0.2</version>
+        <version>0.0.4</version>
+        <relativePath>..</relativePath>
     </parent>
     <artifactId>nifi-cslbehring-nifi-processors</artifactId>
     <packaging>jar</packaging>

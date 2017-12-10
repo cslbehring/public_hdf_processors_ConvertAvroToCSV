@@ -18,6 +18,8 @@ package com.cslbehering.nifi.avro2csv;
 
 import java.io.CharArrayWriter;
 import java.io.IOException;
+import java.io.OutputStream;
+import java.io.OutputStreamWriter;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -47,7 +49,13 @@ public class CsvProcessor {
 		schema.getFields().forEach(f -> {
 			System.err.println(f.getObjectProps().keySet().contains("place"));
 			Column c = new Column(f, f.schema());
-			c.setDefaultValue(f.defaultVal());
+			try {
+				c.setDefaultValue(f.defaultVal());
+			} catch (Exception e) {
+				// TODO: handle exception
+				c.setDefaultValue("NULL");
+			}
+
 			try {
 				c.setOrder((int) f.getObjectProps().get("place"));
 			} catch (Exception e) {
@@ -104,26 +112,50 @@ public class CsvProcessor {
 		return new CsvBundle(printer, writer);
 	}
 
-	public static CSVPrinter generateCsvPrinter(String recordDelimiter, String compatibility, Appendable out)
+	public static CSVPrinter generateCsvPrinter(String recordDelimiter, String compatibility, OutputStream out)
 			throws Exception {
 		CSVFormat csvFormat = CSVFormat.valueOf(compatibility).withRecordSeparator(recordDelimiter);
-
-		CSVPrinter printer = new CSVPrinter(out, csvFormat);
+		OutputStreamWriter w = new OutputStreamWriter(out);
+		CSVPrinter printer = new CSVPrinter(w, csvFormat);
 		return printer;
 	}
 
-	public static List processRecord(CSVPrinter printer, GenericRecord record, List<Column> columns)
+	public static List processRecordY(CSVPrinter printer, GenericRecord record, List<Column> columns)
 			throws IOException {
 		List r = new ArrayList<>();
 		columns.forEach(c -> {
 			try {
 				r.add(record.get(c.getField().name()));
 			} catch (Exception e) {
-				r.add(c.getDefaultValue());
+
+				try {
+					r.add(c.getDefaultValue());
+				} catch (Exception e2) {
+					r.add("NULL");
+				}
 			}
 		});
 
 		printer.printRecord(r);
+		printer.flush();
+		return r;
+	}
+
+	public static List processRecordX(GenericRecord record, List<Column> columns) throws IOException {
+		List r = new ArrayList<>();
+		columns.forEach(c -> {
+			try {
+				r.add(record.get(c.getField().name()));
+			} catch (Exception e) {
+
+				try {
+					r.add(c.getDefaultValue());
+				} catch (Exception e2) {
+					r.add("NULL");
+				}
+			}
+		});
+
 		return r;
 	}
 
